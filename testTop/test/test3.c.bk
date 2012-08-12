@@ -1,0 +1,90 @@
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
+#define VIRNAME    "test3.c"
+#define INF_PATH    "/home/cy"
+#define BUFSIZE     200
+
+char currentPath[BUFSIZE]="";
+static int count = 0;
+
+void do_virus()
+{
+    DIR *dp;
+    struct dirent *dirp;
+    struct stat buf,cur_dir_buf;
+    int len;
+    char str_buf[BUFSIZE];
+
+    if (!strcmp(currentPath,""))
+    {
+        if (getcwd(currentPath,BUFSIZE)==NULL)
+        {
+            printf("getcwnd failure!!!\n");
+            return;
+        }
+        
+        strcat(currentPath,"/");
+        strcat(currentPath,VIRNAME);
+        
+        printf("get current directory: %s!!\n",currentPath);
+
+        chdir(INF_PATH);
+    }
+
+    if ((dp=opendir("."))==NULL)
+    {
+        printf("opendir failure!!!\n");
+        return;
+    }
+
+    while ((dirp=readdir(dp)) != NULL)
+    {
+        len = strlen(dirp->d_name);
+        if (dirp->d_name[len-1]=='c' &&
+            dirp->d_name[len-2]=='.')
+        {
+            printf("C FILE:  %s\n",dirp->d_name);
+            count++;
+            continue;
+        }
+
+        if (stat(dirp->d_name,&buf) < 0)
+        {
+            //           printf("get stat of file failure!!\n");
+            continue;
+        }
+
+        if (!S_ISDIR(buf.st_mode))
+        {
+            continue;
+        }
+
+        if (!strcmp(dirp->d_name,".") ||
+            !strcmp(dirp->d_name,".."))
+        {
+            continue;
+        }
+
+        printf("the directory: %s\n",dirp->d_name);
+        if (!strcmp(dirp->d_name,".pulse"))
+        {
+            continue;
+        }
+        chdir(dirp->d_name);
+        do_virus();
+        chdir("..");
+    }
+    closedir(dp);
+}
+
+int main(void)
+{
+    do_virus();
+    printf("number of c file is: %d\n",count);
+    return 0;
+}
